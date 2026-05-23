@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的收藏</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  font-family: -apple-system, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #000;
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== Search Dropdown ===== */
+.search-wrap {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 60;
+  padding: 10px 16px;
+  transform: translateY(-100%);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.search-wrap.open { transform: translateY(0); pointer-events: auto; }
+
+.search-wrap input {
+  width: 100%;
+  padding: 10px 38px 10px 14px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(28,28,30,0.96);
+  backdrop-filter: blur(20px);
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.5);
+}
+
+.search-wrap input::placeholder { color: rgba(255,255,255,0.35); }
+
+.search-wrap-close {
+  position: absolute;
+  right: 22px; top: 50%;
+  transform: translateY(-50%);
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.6);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== Grid ===== */
+.album-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 180px);
+  grid-auto-rows: 180px;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  gap: 0;
+  align-content: start;
+  justify-content: start;
+}
+
+/* ===== Album Card ===== */
+.album-card {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+
+.album-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.35s ease, filter 0.35s ease;
+}
+
+.album-card:hover img {
+  transform: scale(1.05);
+  filter: brightness(1.12);
+}
+
+.card-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 40%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 12px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.album-card:hover .card-overlay { opacity: 1; }
+
+.card-overlay .title {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-overlay .artist {
+  font-size: 11px;
+  color: rgba(255,255,255,0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.album-card.dragging { opacity: 0.35; }
+
+/* ===== Add Card ===== */
+.add-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.add-card:hover { background: #1c1c1c; }
+
+.add-card-inner { text-align: center; color: rgba(255,255,255,0.25); transition: color 0.2s; }
+.add-card:hover .add-card-inner { color: rgba(255,255,255,0.5); }
+
+.add-card-inner .plus { font-size: 36px; font-weight: 200; line-height: 1; }
+.add-card-inner .label { font-size: 11px; margin-top: 4px; }
+
+/* ===== Empty State ===== */
+.empty-state {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: rgba(255,255,255,0.3);
+}
+
+.empty-state .icon { font-size: 48px; margin-bottom: 10px; opacity: 0.4; }
+.empty-state .title { font-size: 16px; color: rgba(255,255,255,0.5); margin-bottom: 4px; }
+.empty-state .desc { font-size: 12px; }
+
+/* ===== Floating Buttons ===== */
+.fab-group {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fab {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(28,28,30,0.9);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  transition: background 0.15s, transform 0.15s;
+}
+
+.fab:hover { background: rgba(50,50,52,0.9); transform: scale(1.05); }
+.fab:active { transform: scale(0.95); }
+
+/* ===== Modal ===== */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+  backdrop-filter: blur(6px);
+}
+
+.modal-overlay.closing { animation: fadeOut 0.15s ease forwards; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+.modal {
+  background: #1c1c1e;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  max-width: 660px; width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 30px;
+  position: relative;
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+}
+
+.modal-overlay.closing .modal { animation: slideDown 0.15s ease forwards; }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes slideDown { from { transform: translateY(0); opacity: 1; } to { transform: translateY(16px); opacity: 0; } }
+
+.modal-close {
+  position: absolute; top: 12px; right: 12px;
+  width: 30px; height: 30px;
+  border-radius: 50%; border: none;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.5);
+  font-size: 15px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+
+.modal-close:hover { background: rgba(255,255,255,0.14); color: #fff; }
+
+.detail-layout { display: flex; gap: 24px; align-items: flex-start; }
+.detail-cover { width: 220px; height: 220px; border-radius: 6px; object-fit: cover; background: #2a2a2a; flex-shrink: 0; }
+.detail-info { flex: 1; min-width: 0; }
+
+.detail-title { font-size: 20px; font-weight: 600; margin-bottom: 2px; }
+.detail-artist { font-size: 14px; color: rgba(255,255,255,0.5); margin-bottom: 2px; }
+.detail-year { font-size: 12px; color: rgba(255,255,255,0.3); margin-bottom: 16px; }
+
+.detail-section-title {
+  font-size: 11px; color: rgba(255,255,255,0.3);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin-bottom: 6px; padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.track-list { list-style: none; }
+.track-item { display: flex; align-items: center; padding: 6px 0; font-size: 13px; }
+.track-item + .track-item { border-top: 1px solid rgba(255,255,255,0.03); }
+
+.track-num { width: 24px; color: rgba(255,255,255,0.25); font-size: 11px; flex-shrink: 0; }
+.track-name { flex: 1; }
+.track-duration { color: rgba(255,255,255,0.3); font-size: 11px; flex-shrink: 0; margin-left: 8px; font-variant-numeric: tabular-nums; }
+
+.detail-actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+
+/* ===== Buttons ===== */
+.btn {
+  padding: 8px 15px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: #fff; font-size: 12px; cursor: pointer;
+  transition: all 0.15s; font-family: inherit;
+  text-decoration: none; display: inline-block;
+}
+
+.btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.18); }
+.btn-primary { background: #fff; border-color: #fff; color: #000; font-weight: 500; }
+.btn-primary:hover { background: #e0e0e0; border-color: #e0e0e0; }
+.btn-danger { color: #f87171; border-color: transparent; background: transparent; }
+.btn-danger:hover { background: rgba(248,113,113,0.08); border-color: rgba(248,113,113,0.15); }
+.btn-sm { padding: 5px 12px; font-size: 11px; }
+
+/* ===== Form ===== */
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.4); margin-bottom: 4px; }
+
+.form-group input, .form-group textarea {
+  width: 100%; padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
+  color: #fff; font-size: 13px; font-family: inherit;
+  outline: none; transition: border-color 0.15s;
+  resize: vertical;
+}
+
+.form-group input:focus, .form-group textarea:focus { border-color: rgba(255,255,255,0.25); }
+.form-group textarea { min-height: 90px; }
+.form-row { display: flex; gap: 12px; }
+.form-row .form-group { flex: 1; }
+
+.form-tabs { display: flex; margin-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+
+.form-tab {
+  padding: 7px 14px; cursor: pointer;
+  color: rgba(255,255,255,0.35); font-size: 13px;
+  border: none; border-bottom: 2px solid transparent;
+  transition: all 0.15s; background: none; font-family: inherit;
+}
+
+.form-tab.active { color: #fff; border-bottom-color: #fff; font-weight: 500; }
+.form-tab:hover { color: rgba(255,255,255,0.7); }
+
+.fetch-status { font-size: 11px; margin-top: 4px; min-height: 16px; }
+.fetch-status.success { color: #4ade80; }
+.fetch-status.error { color: #f87171; }
+.fetch-status.loading { color: rgba(255,255,255,0.4); }
+
+/* ===== Toast ===== */
+.toast-container {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  z-index: 200; display: flex; flex-direction: column; gap: 6px; pointer-events: none;
+}
+
+.toast {
+  padding: 10px 18px; border-radius: 8px;
+  background: rgba(28,28,30,0.94); backdrop-filter: blur(10px);
+  color: #fff; font-size: 13px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  animation: toastIn 0.25s ease, toastOut 0.25s ease 1.6s forwards;
+  pointer-events: auto; text-align: center;
+}
+
+@keyframes toastIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toastOut { from { opacity: 1; } to { opacity: 0; transform: translateY(-4px); } }
+
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+/* ===== Responsive ===== */
+@media (max-width: 900px) {
+  .album-grid { grid-template-columns: repeat(auto-fill, 150px); grid-auto-rows: 150px; }
+}
+
+@media (max-width: 600px) {
+  .album-grid { grid-template-columns: repeat(auto-fill, calc(100vw / 3)); grid-auto-rows: calc(100vw / 3); }
+  .detail-layout { flex-direction: column; align-items: center; }
+  .detail-cover { width: 180px; height: 180px; }
+  .modal { padding: 24px 18px; }
+  .form-row { flex-direction: column; gap: 0; }
+}
+
+@media (max-width: 400px) {
+  .album-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<div class="search-wrap" id="searchWrap">
+  <input type="text" id="searchInput" placeholder="搜索专辑或艺人...">
+  <button class="search-wrap-close" id="searchClose">&times;</button>
+</div>
+
+<div class="album-grid" id="albumGrid"></div>
+
+<div class="fab-group">
+  <button class="fab" id="searchFab" title="搜索 (Ctrl+K)">&#128269;</button>
+  <button class="fab" id="addFab" title="添加专辑">+</button>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+const STORAGE_KEY = 'vinyl-wall-albums';
+
+const DEFAULT_ALBUMS = [
+  {
+    id: 'a_default_blacktangerine',
+    title: '黑色柳丁',
+    artist: '陶喆',
+    year: 2002,
+    neteaseId: '15190',
+    coverUrl: 'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/05/7a/97/057a9723-2dbd-873b-81e0-5090879b2942/825646245352.jpg/600x600bb.jpg',
+    tracks: [
+      { name: '黑色柳丁', duration: '4:15' },
+      { name: '今天晚间新闻', duration: '2:13' },
+      { name: 'Dear God', duration: '5:29' },
+      { name: 'Angel', duration: '3:52' },
+      { name: '讨厌红楼梦', duration: '4:02' },
+      { name: '蝴蝶', duration: '4:43' },
+      { name: '宫保鸡丁', duration: '3:54' },
+      { name: 'Melody', duration: '4:29' },
+      { name: '月亮代表谁的心', duration: '3:25' },
+      { name: '二十二', duration: '4:22' },
+      { name: 'My Anata', duration: '3:47' },
+      { name: '摇篮曲', duration: '4:15' },
+      { name: 'Katrina (Demo)', duration: '4:26' }
+    ],
+    addedAt: Date.now()
+  }
+];
+
+function loadAlbums() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const saved = raw ? JSON.parse(raw) : [];
+    let changed = false;
+    const savedIds = new Set(saved.map(a => a.neteaseId).filter(Boolean));
+    const savedTitles = new Set(saved.map(a => a.title));
+    const missing = DEFAULT_ALBUMS.filter(a =>
+      !(a.neteaseId && savedIds.has(a.neteaseId)) && !savedTitles.has(a.title)
+    );
+    DEFAULT_ALBUMS.forEach(d => {
+      const match = saved.find(a =>
+        (d.neteaseId && a.neteaseId === d.neteaseId) || a.title === d.title
+      );
+      if (match && match.coverUrl !== d.coverUrl) {
+        match.coverUrl = d.coverUrl;
+        changed = true;
+      }
+    });
+    if (missing.length > 0 || changed) {
+      const merged = [...missing, ...saved];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      return merged;
+    }
+    return saved;
+  } catch { return DEFAULT_ALBUMS; }
+}
+
+function saveAlbums(albums) { localStorage.setItem(STORAGE_KEY, JSON.stringify(albums)); }
+
+let albums = loadAlbums();
+
+const albumGrid = document.getElementById('albumGrid');
+const searchInput = document.getElementById('searchInput');
+const searchWrap = document.getElementById('searchWrap');
+const searchClose = document.getElementById('searchClose');
+const toastContainer = document.getElementById('toastContainer');
+
+function showToast(msg) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  toastContainer.appendChild(el);
+  el.addEventListener('animationend', e => { if (e.animationName === 'toastOut') el.remove(); });
+}
+
+function genId() { return 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); }
+
+function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+
+// ===== Render =====
+function renderAlbums(filterText) {
+  const query = (filterText || '').toLowerCase().trim();
+  const filtered = query
+    ? albums.filter(a => a.title.toLowerCase().includes(query) || a.artist.toLowerCase().includes(query))
+    : albums;
+
+  albumGrid.innerHTML = '';
+
+  if (albums.length === 0) {
+    albumGrid.innerHTML = `<div class="empty-state"><div class="icon">&#127925;</div><div class="title">还没有收藏专辑</div><div class="desc">点击左下角 + 开始添加</div></div>`;
+    return;
+  }
+
+  if (filtered.length === 0) {
+    albumGrid.innerHTML = `<div class="empty-state"><div class="icon">&#128270;</div><div class="title">没有找到匹配的专辑</div><div class="desc">试试其他关键词</div></div>`;
+    return;
+  }
+
+  filtered.forEach(album => {
+    const card = document.createElement('div');
+    card.className = 'album-card';
+    card.setAttribute('data-id', album.id);
+    card.innerHTML = `
+      <img src="${escapeHtml(album.coverUrl)}" alt="${escapeHtml(album.title)}" loading="lazy"
+           onerror="this.style.background='#1a1a1a';this.alt='?'">
+      <div class="card-overlay">
+        <div class="title">${escapeHtml(album.title)}</div>
+        <div class="artist">${escapeHtml(album.artist)}</div>
+      </div>
+    `;
+    card.addEventListener('click', () => openDetail(album));
+    albumGrid.appendChild(card);
+  });
+
+  const addCard = document.createElement('div');
+  addCard.className = 'add-card';
+  addCard.innerHTML = `<div class="add-card-inner"><div class="plus">+</div><div class="label">添加</div></div>`;
+  addCard.addEventListener('click', openAddForm);
+  albumGrid.appendChild(addCard);
+
+  initSortable();
+}
+
+// ===== Drag =====
+let sortableInstance = null;
+
+function initSortable() {
+  if (sortableInstance) sortableInstance.destroy();
+  if (!albumGrid || albums.length < 2) return;
+  sortableInstance = new Sortable(albumGrid, {
+    animation: 180,
+    ghostClass: 'dragging',
+    filter: '.add-card',
+    onEnd(evt) {
+      const oi = evt.oldIndex, ni = evt.newIndex;
+      if (oi === ni) return;
+      const [m] = albums.splice(oi, 1);
+      albums.splice(ni, 0, m);
+      saveAlbums(albums);
+    }
+  });
+}
+
+// ===== Detail Modal =====
+let currentModal = null;
+
+function closeModal(overlay) {
+  if (!overlay) return;
+  overlay.classList.add('closing');
+  overlay.addEventListener('animationend', () => {
+    overlay.remove();
+    if (currentModal === overlay) currentModal = null;
+  }, { once: true });
+}
+
+function openDetail(album) {
+  if (currentModal) closeModal(currentModal);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(overlay); });
+
+  const tracksHtml = album.tracks && album.tracks.length > 0
+    ? album.tracks.map((t, i) => `
+        <li class="track-item">
+          <span class="track-num">${String(i + 1).padStart(2, '0')}</span>
+          <span class="track-name">${escapeHtml(t.name)}</span>
+          ${t.duration ? `<span class="track-duration">${escapeHtml(t.duration)}</span>` : ''}
+        </li>`).join('')
+    : '<li class="track-item"><span class="track-name" style="color:rgba(255,255,255,0.3)">暂无曲目信息</span></li>';
+
+  const neteaseLink = album.neteaseId
+    ? `<a href="https://music.163.com/#/album?id=${album.neteaseId}" target="_blank" rel="noopener" class="btn btn-sm">网易云打开</a>`
+    : '';
+
+  overlay.innerHTML = `
+    <div class="modal" onclick="event.stopPropagation()">
+      <button class="modal-close">&times;</button>
+      <div class="detail-layout">
+        <img class="detail-cover" src="${escapeHtml(album.coverUrl)}" alt="${escapeHtml(album.title)}"
+             onerror="this.style.background='#2a2a2a';this.alt='?'">
+        <div class="detail-info">
+          <div class="detail-title">${escapeHtml(album.title)}</div>
+          <div class="detail-artist">${escapeHtml(album.artist)}</div>
+          ${album.year ? `<div class="detail-year">${escapeHtml(String(album.year))}</div>` : ''}
+          <div class="detail-section-title">曲目列表</div>
+          <ul class="track-list">${tracksHtml}</ul>
+          <div class="detail-actions">
+            ${neteaseLink}
+            <button class="btn btn-sm edit-btn">编辑</button>
+            <button class="btn btn-sm btn-danger delete-btn">删除</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  currentModal = overlay;
+
+  overlay.querySelector('.modal-close').addEventListener('click', () => closeModal(overlay));
+  overlay.querySelector('.edit-btn').addEventListener('click', () => { closeModal(overlay); openEditForm(album); });
+  overlay.querySelector('.delete-btn').addEventListener('click', () => {
+    if (confirm(`确定删除「${album.title}」？`)) {
+      albums = albums.filter(a => a.id !== album.id);
+      saveAlbums(albums);
+      closeModal(overlay);
+      renderAlbums(searchInput.value);
+      showToast('已删除');
+    }
+  });
+
+  const escH = e => { if (e.key === 'Escape') { closeModal(overlay); document.removeEventListener('keydown', escH); } };
+  document.addEventListener('keydown', escH);
+}
+
+// ===== Add / Edit =====
+function openAddForm() { openFormModal(null); }
+function openEditForm(album) { openFormModal(album); }
+
+function openFormModal(editAlbum) {
+  if (currentModal) closeModal(currentModal);
+  const isEdit = !!editAlbum;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(overlay); });
+
+  const v = (field, fb) => editAlbum ? escapeHtml(String(editAlbum[field] || fb || '')) : '';
+  const tracksVal = editAlbum && editAlbum.tracks
+    ? editAlbum.tracks.map(t => t.name + (t.duration ? ' - ' + t.duration : '')).join('\n') : '';
+
+  overlay.innerHTML = `
+    <div class="modal" onclick="event.stopPropagation()">
+      <button class="modal-close">&times;</button>
+      <h2 style="font-size:18px;font-weight:600;margin-bottom:16px;">${isEdit ? '编辑专辑' : '添加专辑'}</h2>
+      <div class="form-tabs">
+        <button class="form-tab active" data-tab="manual">手动填写</button>
+        <button class="form-tab" data-tab="url">从网易云导入</button>
+      </div>
+      <div class="form-panel" id="formPanelUrl" style="display:none">
+        <div class="form-group">
+          <label>网易云专辑链接</label>
+          <input type="text" id="neteaseUrlInput" placeholder="https://music.163.com/#/album?id=...">
+          <div class="fetch-status" id="fetchStatus"></div>
+        </div>
+        <button class="btn btn-primary" id="fetchBtn">获取专辑信息</button>
+      </div>
+      <div class="form-panel" id="formPanelManual">
+        <div class="form-group"><label>专辑封面 URL</label><input type="text" id="coverInput" value="${v('coverUrl')}" placeholder="https://..."></div>
+        <div class="form-row">
+          <div class="form-group"><label>专辑名称</label><input type="text" id="titleInput" value="${v('title')}" placeholder="专辑名称"></div>
+          <div class="form-group"><label>艺人</label><input type="text" id="artistInput" value="${v('artist')}" placeholder="艺人名称"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>发行年份</label><input type="text" id="yearInput" value="${v('year')}" placeholder="2024"></div>
+          <div class="form-group"><label>网易云专辑 ID</label><input type="text" id="neteaseIdInput" value="${v('neteaseId')}" placeholder="可选"></div>
+        </div>
+        <div class="form-group">
+          <label>曲目列表（每行一首，可选时长: 曲名 - 3:45）</label>
+          <textarea id="tracksInput" placeholder="Track 1 - 3:45&#10;Track 2 - 4:20">${tracksVal}</textarea>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
+        <button class="btn" id="cancelBtn">取消</button>
+        <button class="btn btn-primary" id="saveBtn">${isEdit ? '保存' : '添加'}</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  currentModal = overlay;
+
+  const tabs = overlay.querySelectorAll('.form-tab');
+  const panelUrl = overlay.querySelector('#formPanelUrl');
+  const panelManual = overlay.querySelector('#formPanelManual');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const t = tab.getAttribute('data-tab');
+      panelUrl.style.display = t === 'url' ? 'block' : 'none';
+      panelManual.style.display = t === 'manual' ? 'block' : 'none';
+    });
+  });
+
+  overlay.querySelector('#fetchBtn').addEventListener('click', async () => {
+    const urlInput = overlay.querySelector('#neteaseUrlInput');
+    const statusEl = overlay.querySelector('#fetchStatus');
+    const url = urlInput.value.trim();
+    if (!url) { statusEl.textContent = '请输入链接'; statusEl.className = 'fetch-status error'; return; }
+    const albumId = extractNeteaseId(url);
+    if (!albumId) { statusEl.textContent = '无法识别链接格式'; statusEl.className = 'fetch-status error'; return; }
+    statusEl.textContent = '获取中...';
+    statusEl.className = 'fetch-status loading';
+    try {
+      const data = await fetchNeteaseAlbum(albumId);
+      if (data) {
+        overlay.querySelector('#titleInput').value = data.title || '';
+        overlay.querySelector('#artistInput').value = data.artist || '';
+        overlay.querySelector('#yearInput').value = data.year || '';
+        overlay.querySelector('#coverInput').value = data.coverUrl || '';
+        overlay.querySelector('#neteaseIdInput').value = albumId;
+        overlay.querySelector('#tracksInput').value = (data.tracks || []).map(t => t.name + (t.duration ? ' - ' + t.duration : '')).join('\n');
+        statusEl.textContent = '获取成功！';
+        statusEl.className = 'fetch-status success';
+        tabs.forEach(t => t.classList.remove('active'));
+        tabs[0].classList.add('active');
+        panelUrl.style.display = 'none';
+        panelManual.style.display = 'block';
+      } else {
+        statusEl.textContent = '获取失败，请手动填写';
+        statusEl.className = 'fetch-status error';
+      }
+    } catch (err) {
+      statusEl.textContent = '网络错误';
+      statusEl.className = 'fetch-status error';
+    }
+  });
+
+  overlay.querySelector('#cancelBtn').addEventListener('click', () => closeModal(overlay));
+
+  overlay.querySelector('#saveBtn').addEventListener('click', () => {
+    const title = overlay.querySelector('#titleInput').value.trim();
+    const artist = overlay.querySelector('#artistInput').value.trim();
+    const coverUrl = overlay.querySelector('#coverInput').value.trim();
+    const yearVal = overlay.querySelector('#yearInput').value.trim();
+    const neteaseId = overlay.querySelector('#neteaseIdInput').value.trim();
+    const tracksRaw = overlay.querySelector('#tracksInput').value.trim();
+    if (!title || !artist || !coverUrl) { showToast('请填写名称、艺人和封面链接'); return; }
+    const tracks = parseTracks(tracksRaw);
+    const year = yearVal ? parseInt(yearVal) || yearVal : null;
+    if (isEdit) {
+      const idx = albums.findIndex(a => a.id === editAlbum.id);
+      if (idx !== -1) albums[idx] = { ...albums[idx], title, artist, coverUrl, year, neteaseId, tracks };
+    } else {
+      albums.push({ id: genId(), title, artist, coverUrl, year: year || null, neteaseId: neteaseId || null, tracks, addedAt: Date.now() });
+    }
+    saveAlbums(albums);
+    closeModal(overlay);
+    renderAlbums(searchInput.value);
+    showToast(isEdit ? '已更新' : '已添加');
+  });
+
+  const escH = e => { if (e.key === 'Escape') { closeModal(overlay); document.removeEventListener('keydown', escH); } };
+  document.addEventListener('keydown', escH);
+}
+
+// ===== NetEase =====
+function extractNeteaseId(url) {
+  for (const p of [/[?&]id=(\d+)/, /music\.163\.com\/album\/(\d+)/, /^(\d+)$/]) {
+    const m = url.match(p); if (m) return m[1];
+  }
+  return null;
+}
+
+async function fetchNeteaseAlbum(albumId) {
+  const apiUrl = `https://music.163.com/api/album/${albumId}`;
+  const proxies = [
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`,
+    `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`,
+  ];
+  for (const url of proxies) {
+    try {
+      const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!r.ok) continue;
+      const j = await r.json();
+      if (j.code === 200 && j.album) {
+        return {
+          title: j.album.name, artist: j.album.artist?.name || '未知',
+          coverUrl: j.album.picUrl || '',
+          year: j.album.publishTime ? new Date(j.album.publishTime).getFullYear() : null,
+          tracks: (j.album.songs || []).map(s => ({ name: s.name, duration: formatDuration(s.dt || 0) }))
+        };
+      }
+    } catch { continue; }
+  }
+  try {
+    const r = await fetch(apiUrl, { headers: { 'Accept': 'application/json', 'Referer': 'https://music.163.com/' } });
+    if (r.ok) {
+      const j = await r.json();
+      if (j.code === 200 && j.album) {
+        return {
+          title: j.album.name, artist: j.album.artist?.name || '未知',
+          coverUrl: j.album.picUrl || '',
+          year: j.album.publishTime ? new Date(j.album.publishTime).getFullYear() : null,
+          tracks: (j.album.songs || []).map(s => ({ name: s.name, duration: formatDuration(s.dt || 0) }))
+        };
+      }
+    }
+  } catch { /* blocked */ }
+  return null;
+}
+
+function formatDuration(ms) {
+  const m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function parseTracks(raw) {
+  if (!raw) return [];
+  return raw.split('\n').filter(l => l.trim()).map(l => {
+    const m = l.match(/^(.+?)\s*[-–—]\s*(\d{1,2}:\d{2})\s*$/);
+    return m ? { name: m[1].trim(), duration: m[2].trim() } : { name: l.trim(), duration: null };
+  });
+}
+
+// ===== Search =====
+document.getElementById('searchFab').addEventListener('click', () => {
+  searchWrap.classList.add('open');
+  searchInput.focus();
+});
+
+searchClose.addEventListener('click', () => {
+  searchWrap.classList.remove('open');
+  searchInput.value = '';
+  renderAlbums('');
+});
+
+searchInput.addEventListener('input', () => renderAlbums(searchInput.value));
+
+document.getElementById('addFab').addEventListener('click', openAddForm);
+
+// ===== Init =====
+renderAlbums('');
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    searchWrap.classList.add('open');
+    searchInput.focus();
+  }
+});
+</script>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+<script>
+if (typeof Sortable === 'undefined') {
+  document.write('<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"><\/script>');
+}
+</script>
+
+</body>
+</html>
